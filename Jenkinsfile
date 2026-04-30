@@ -1,47 +1,30 @@
-pipeline {
-    agent any
+node {
+    def imageName = 'sumukha3010/sampleimage'
+    def containerName = 'sampleimage-test'
 
-    environment {
-        IMAGE_NAME = 'sumukha3010/sampleimage'
-        CONTAINER_NAME = 'sampleimage-test'
-    }
-
-    stages {
+    try {
         stage('Checkout') {
-            steps {
-                checkout scm
-            }
+            checkout scm
         }
 
         stage('Build Docker Image') {
-            steps {
-                sh 'docker build -t ${IMAGE_NAME} .'
-            }
+            sh "docker build -t ${imageName} ."
         }
 
         stage('Smoke Test') {
-            steps {
-                sh 'docker run --rm --name ${CONTAINER_NAME} ${IMAGE_NAME}'
-            }
+            sh "docker run --rm --name ${containerName} ${imageName}"
         }
 
-        stage('Push Image') {
-            when {
-                branch 'master'
-            }
-            steps {
+        if (env.BRANCH_NAME == 'master' || env.BRANCH_NAME == 'main' || !env.BRANCH_NAME) {
+            stage('Push Image') {
                 withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKERHUB_USER', passwordVariable: 'DOCKERHUB_TOKEN')]) {
                     sh 'echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USER" --password-stdin'
-                    sh 'docker push ${IMAGE_NAME}'
+                    sh "docker push ${imageName}"
                 }
             }
         }
-    }
-
-    post {
-        always {
-            sh 'docker rm -f ${CONTAINER_NAME} || true'
-            sh 'docker rmi -f ${IMAGE_NAME} || true'
-        }
+    } finally {
+        sh "docker rm -f ${containerName} || true"
+        sh "docker rmi -f ${imageName} || true"
     }
 }
